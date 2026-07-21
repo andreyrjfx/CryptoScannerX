@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 
+from app.__version__ import __version__
 from app.config import FILTER_COINS
 from app.clients.http import HttpClient
 from app.exchanges.manager import ExchangeManager
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="CryptoScanner — поиск арбитражных возможностей")
+    parser = argparse.ArgumentParser(description="CryptoScannerX — поиск арбитражных возможностей")
     parser.add_argument(
         "coins", nargs="*",
         help="Монеты для фильтрации (например BTC ETH SOL). По умолчанию — FILTER_COINS из config.py",
@@ -24,6 +25,9 @@ def parse_args():
     parser.add_argument(
         "-v", "--verbose", action="store_true",
         help="Показывать технические логи (подключение к биржам, количество тикеров и т.д.)",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"CryptoScannerX {__version__}",
     )
     return parser.parse_args()
 
