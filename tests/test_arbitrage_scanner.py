@@ -90,3 +90,19 @@ def test_results_sorted_by_net_spread_descending():
 
     spreads = [o.net_spread for o in opportunities]
     assert spreads == sorted(spreads, reverse=True)
+
+
+def test_implausibly_large_spread_is_filtered_out():
+    """
+    Регрессионный тест: если один и тот же тикер на двух биржах — на самом деле
+    разные активы (или пришли битые данные), спред может быть в тысячи процентов.
+    Это не реальный арбитраж, и такие строки не должны попадать в результаты.
+    """
+    tickers = [
+        make_ticker(exchange="mexc", market="future", coin="ON", symbol="ON_USDT", bid=0.01, ask=0.01),
+        make_ticker(exchange="bybit", market="future", coin="ON", symbol="ONUSDT", bid=6.5, ask=6.5),
+    ]
+
+    opportunities = ArbitrageScanner(tickers).scan()
+
+    assert opportunities == []

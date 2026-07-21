@@ -1,8 +1,11 @@
 from itertools import combinations
+import logging
 
-from app.config import MIN_SPREAD, DISPLAY_SPREAD, MIN_VOLUME_USDT
+from app.config import MIN_SPREAD, DISPLAY_SPREAD, MIN_VOLUME_USDT, MAX_SANE_SPREAD
 from app.models.opportunity import Opportunity
 from app.calculators.trade_calculator import TradeCalculator
+
+logger = logging.getLogger(__name__)
 
 
 class ArbitrageScanner:
@@ -70,6 +73,16 @@ class ArbitrageScanner:
 
         # Пока фильтруем по сырому спреду. Позже перейдем на net_spread.
         if spread < DISPLAY_SPREAD:
+            return
+
+        if spread > MAX_SANE_SPREAD:
+            # Скорее всего разные активы под одинаковым тикером на разных
+            # биржах либо битые данные — а не реальная возможность.
+            logger.warning(
+                "%s: спред %.2f%% (%s %s -> %s %s) выглядит нереалистично — "
+                "пропущено (проверь вручную, что это один и тот же актив)",
+                buy.coin, spread, buy.exchange, buy.market, sell.exchange, sell.market,
+            )
             return
 
         trade = self.trade.calculate(
