@@ -26,10 +26,11 @@ class ExchangeManager:
         for name, exchange in list(self.exchanges.items()):
             try:
                 await exchange.load_markets()
-                logger.info("✅ %-10s | рынков: %d", name, len(exchange.markets))
+                print(f"✅ {name:<10} | рынков: {len(exchange.markets)}")
 
-            except Exception:
-                logger.exception("❌ Ошибка подключения к %s", name)
+            except Exception as exc:
+                print(f"❌ {name:<10} | ошибка подключения: {exc}")
+                logger.debug("Ошибка подключения к %s", name, exc_info=True)
 
                 try:
                     await exchange.close()
