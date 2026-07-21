@@ -1,4 +1,4 @@
-# CryptoScanner
+# CryptoScannerX
 
 Асинхронный терминал поиска арбитражных возможностей между криптовалютными биржами (Binance, Bybit, MEXC).
 
