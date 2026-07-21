@@ -165,8 +165,15 @@ if __name__ == "__main__":
     cli_args = parse_args()
 
     logging.basicConfig(
-        level=logging.DEBUG if cli_args.verbose else logging.WARNING,
+        level=logging.WARNING,
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    if cli_args.verbose:
+        # DEBUG только для нашего кода — иначе сторонние библиотеки (aiohttp,
+        # ccxt) на этом уровне могут выводить сырые HTTP-ответы целиком.
+        # "__main__" — имя логгера самого main.py при запуске как `python -m app.main`.
+        logging.getLogger("app").setLevel(logging.DEBUG)
+        logging.getLogger("__main__").setLevel(logging.DEBUG)
     asyncio.run(main(cli_args))
