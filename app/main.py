@@ -12,8 +12,12 @@ from app.services.market_filter import MarketFilter
 from app.services.arbitrage_scanner import ArbitrageScanner
 from app.services.funding_enricher import MexcFundingEnricher
 from app.services.funding_scanner import FundingScanner
+from app.services.depth_checker import DepthChecker
 
 logger = logging.getLogger(__name__)
+
+# Сколько лучших возможностей показываем и проверяем на реальную глубину стакана
+PRINT_LIMIT = 50
 
 
 def parse_args():
@@ -44,19 +48,37 @@ def print_opportunities(opportunities):
 
     print(
         f"{'TYPE':<16}{'COIN':<10}{'BUY':<24}{'SELL':<24}"
-        f"{'RAW':>8}{'FEE':>8}{'NET':>8}{'PNL':>12}"
+        f"{'RAW':>8}{'FEE':>8}{'NET':>8}{'PNL':>10}"
+        f"{'SLIP':>8}{'REAL NET':>10}{'REAL PNL':>10}"
     )
-    print("-" * 112)
+    print("-" * 138)
 
-    for item in opportunities[:50]:
+    for item in opportunities[:PRINT_LIMIT]:
         buy = f"{item.buy_exchange} {item.buy_market}"
         sell = f"{item.sell_exchange} {item.sell_market}"
+
+        if item.effective_spread is not None:
+            slip = f"{item.slippage_pct:>7.2f}%"
+            real_net = f"{item.real_net_spread:>9.2f}%"
+            real_pnl = f"{item.real_expected_profit_usdt:>10.2f}"
+        else:
+            # Глубина стакана не проверялась (не входит в топ-N) или запрос не удался
+            slip = f"{'—':>8}"
+            real_net = f"{'—':>10}"
+            real_pnl = f"{'—':>10}"
 
         print(
             f"{item.trade_type:<16}{item.coin:<10}{buy:<24}{sell:<24}"
             f"{item.spread:>7.2f}%{item.fee_percent:>7.2f}%"
-            f"{item.net_spread:>7.2f}%{item.expected_profit_usdt:>11.2f}"
+            f"{item.net_spread:>7.2f}%{item.expected_profit_usdt:>9.2f}"
+            f"{slip}{real_net}{real_pnl}"
         )
+
+    print(
+        "\nRAW/FEE/NET/PNL — по top-of-book цене (без учёта глубины стакана).\n"
+        "SLIP/REAL NET/REAL PNL — с учётом VWAP-исполнения на "
+        "POSITION_SIZE_USDT (реальная глубина стакана)."
+    )
 
 
 def print_funding_opportunities(opportunities):
@@ -110,6 +132,10 @@ async def main(args):
 
         scanner = ArbitrageScanner(tickers, coins)
         opportunities = scanner.scan()
+
+        # Глубину стакана проверяем только у тех возможностей, что реально
+        # попадут в таблицу — запрос стакана это отдельный вызов на символ.
+        await DepthChecker().check(opportunities[:PRINT_LIMIT])
 
         print_opportunities(opportunities)
 

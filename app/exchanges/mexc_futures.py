@@ -11,6 +11,7 @@ class MexcFuturesAdapter(BaseExchangeAdapter):
     MARKET = "future"
 
     URL = "https://contract.mexc.com/api/v1/contract/ticker"
+    DEPTH_URL_TEMPLATE = "https://contract.mexc.com/api/v1/contract/depth/{symbol}"
     SYMBOL_SUFFIX = "_USDT"
 
     def extract_coin(self, symbol: str) -> str:
@@ -31,3 +32,13 @@ class MexcFuturesAdapter(BaseExchangeAdapter):
 
         logger.info("MEXC Futures: получено %d", len(tickers))
         return tickers
+
+    async def fetch_order_book(self, symbol, limit=50):
+        # У MEXC futures символ — часть пути, а не query-параметр,
+        # и ответ без обёртки "data" (в отличие от большинства других эндпоинтов биржи).
+        url = self.DEPTH_URL_TEMPLATE.format(symbol=symbol)
+        response = await self.http.get_json(url, params={"limit": limit})
+        return {
+            "bids": self._parse_levels(response.get("bids")),
+            "asks": self._parse_levels(response.get("asks")),
+        }

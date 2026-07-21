@@ -11,6 +11,7 @@ class BybitSpotAdapter(BaseExchangeAdapter):
     MARKET = "spot"
 
     URL = "https://api.bybit.com/v5/market/tickers"
+    ORDERBOOK_URL = "https://api.bybit.com/v5/market/orderbook"
 
     async def fetch_tickers(self):
         logger.info("Получение тикеров: Bybit Spot")
@@ -27,3 +28,6 @@ class BybitSpotAdapter(BaseExchangeAdapter):
 
         logger.info("Bybit Spot: получено %d", len(tickers))
         return tickers
+
+    async def fetch_order_book(self, symbol, limit=50):
+        return await self.fetch_order_book_bybit_style(self.ORDERBOOK_URL, "spot", symbol, limit)

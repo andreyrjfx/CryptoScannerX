@@ -13,6 +13,7 @@ class BinanceFuturesAdapter(BaseExchangeAdapter):
     BOOK_TICKER_URL = "https://fapi.binance.com/fapi/v1/ticker/bookTicker"
     STATS_24H_URL = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     PREMIUM_INDEX_URL = "https://fapi.binance.com/fapi/v1/premiumIndex"
+    DEPTH_URL = "https://fapi.binance.com/fapi/v1/depth"
 
     async def fetch_tickers(self):
         logger.info("Получение тикеров: Binance Futures")
@@ -34,3 +35,6 @@ class BinanceFuturesAdapter(BaseExchangeAdapter):
 
         logger.info("Binance Futures: получено %d", len(tickers))
         return tickers
+
+    async def fetch_order_book(self, symbol, limit=50):
+        return await self.fetch_order_book_binance_style(self.DEPTH_URL, symbol, limit)

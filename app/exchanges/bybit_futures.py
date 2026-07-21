@@ -11,6 +11,7 @@ class BybitFuturesAdapter(BaseExchangeAdapter):
     MARKET = "future"
 
     URL = "https://api.bybit.com/v5/market/tickers"
+    ORDERBOOK_URL = "https://api.bybit.com/v5/market/orderbook"
 
     async def fetch_tickers(self):
         logger.info("Получение тикеров: Bybit Futures")
@@ -28,3 +29,6 @@ class BybitFuturesAdapter(BaseExchangeAdapter):
 
         logger.info("Bybit Futures: получено %d", len(tickers))
         return tickers
+
+    async def fetch_order_book(self, symbol, limit=50):
+        return await self.fetch_order_book_bybit_style(self.ORDERBOOK_URL, "linear", symbol, limit)

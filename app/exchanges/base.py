@@ -83,6 +83,36 @@ class BaseExchangeAdapter:
 
         return funding
 
+    @staticmethod
+    def _parse_levels(raw_levels):
+        """[[price, qty], ...] -> [(float, float), ...], пропуская некорректные записи."""
+        levels = []
+        for level in raw_levels or []:
+            try:
+                levels.append((float(level[0]), float(level[1])))
+            except (IndexError, ValueError, TypeError, KeyError):
+                continue
+        return levels
+
+    async def fetch_order_book_binance_style(self, url, symbol, limit):
+        """Binance/MEXC-spot: {"bids": [[p,q],...], "asks": [[p,q],...]}."""
+        response = await self.http.get_json(url, params={"symbol": symbol, "limit": limit})
+        return {
+            "bids": self._parse_levels(response.get("bids")),
+            "asks": self._parse_levels(response.get("asks")),
+        }
+
+    async def fetch_order_book_bybit_style(self, url, category, symbol, limit):
+        """Bybit: {"result": {"b": [[p,q],...], "a": [[p,q],...]}}."""
+        response = await self.http.get_json(url, params={
+            "category": category, "symbol": symbol, "limit": limit,
+        })
+        result = response.get("result", {})
+        return {
+            "bids": self._parse_levels(result.get("b")),
+            "asks": self._parse_levels(result.get("a")),
+        }
+
     async def fetch_merged_book_and_stats(self, book_url, stats_url, bid_key, ask_key, volume_key):
         """
         Биржи, отдающие цены и объём двумя разными эндпоинтами
