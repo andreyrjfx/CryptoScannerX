@@ -28,7 +28,8 @@ def parse_args():
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true",
-        help="Показывать технические логи (подключение к биржам, количество тикеров и т.д.)",
+        help="Показывать технические логи (подключение к биржам, количество тикеров, "
+             "причины неудачных запросов funding/order book и т.д.)",
     )
     parser.add_argument(
         "--version", action="version", version=f"CryptoScannerX {__version__}",
@@ -164,7 +165,7 @@ if __name__ == "__main__":
     cli_args = parse_args()
 
     logging.basicConfig(
-        level=logging.INFO if cli_args.verbose else logging.WARNING,
+        level=logging.DEBUG if cli_args.verbose else logging.WARNING,
         format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )

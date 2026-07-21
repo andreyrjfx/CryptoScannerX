@@ -34,11 +34,15 @@ class MexcFuturesAdapter(BaseExchangeAdapter):
         return tickers
 
     async def fetch_order_book(self, symbol, limit=50):
-        # У MEXC futures символ — часть пути, а не query-параметр,
-        # и ответ без обёртки "data" (в отличие от большинства других эндпоинтов биржи).
+        # У MEXC futures символ — часть пути, а не query-параметр. Формат ответа
+        # у этого эндпоинта на практике встречается и "плоским" ({"bids":...}),
+        # и обёрнутым в {"data": {...}}, как у большинства других эндпоинтов
+        # MEXC — поэтому принимаем оба варианта.
         url = self.DEPTH_URL_TEMPLATE.format(symbol=symbol)
         response = await self.http.get_json(url, params={"limit": limit})
+        payload = response.get("data", response) if isinstance(response.get("data"), dict) else response
+
         return {
-            "bids": self._parse_levels(response.get("bids")),
-            "asks": self._parse_levels(response.get("asks")),
+            "bids": self._parse_levels(payload.get("bids")),
+            "asks": self._parse_levels(payload.get("asks")),
         }
