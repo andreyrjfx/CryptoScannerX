@@ -144,3 +144,31 @@ async def test_mexc_funding_enricher_only_touches_mexc_futures():
     assert spot_ticker.funding_rate == 0.0
     assert other_exchange_ticker.funding_rate == 0.0
     assert len(http.calls) == 1  # только один запрос — для future mexc тикера
+
+
+async def test_mexc_funding_enricher_processes_multiple_batches_without_gaps():
+    """
+    Регрессионный тест: раньше все тикеры запрашивались одним asyncio.gather
+    без учёта лимита биржи (20 запросов/2с) — при большом количестве тикеров
+    без фильтра монет это приводило к массовым ошибкам rate limit. Теперь
+    донабор идёт батчами; здесь просто проверяем, что batching не теряет
+    и не дублирует тикеры на границах батчей.
+    """
+    tickers = [
+        make_ticker(exchange="mexc", market="future", coin=f"COIN{i}", symbol=f"COIN{i}_USDT")
+        for i in range(23)  # больше одного BATCH_SIZE (15), захватывает границу батчей
+    ]
+
+    responses = {
+        MexcFundingEnricher.URL_TEMPLATE.format(symbol=t.symbol): {"data": {"fundingRate": 0.0001 * i}}
+        for i, t in enumerate(tickers)
+    }
+    http = FakeHttpClient(responses)
+
+    enricher = MexcFundingEnricher(http)
+    enricher.BATCH_PAUSE_SECONDS = 0  # не ждать реальные секунды в тесте
+
+    await enricher.enrich(tickers)
+
+    for i, ticker in enumerate(tickers):
+        assert abs(ticker.funding_rate - 0.01 * i) < 1e-9
