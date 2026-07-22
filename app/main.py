@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from app.__version__ import __version__
-from app.config import FILTER_COINS, COINGECKO_API_KEY
+from app.config import FILTER_COINS, COINGECKO_API_KEY, COINGECKO_RATE_LIMIT_PER_MINUTE
 from app.clients.http import HttpClient
 from app.exchanges.manager import ExchangeManager
 
@@ -89,9 +89,11 @@ def print_opportunities(opportunities):
         "\nRAW/FEE/NET/PNL — по top-of-book цене (без учёта глубины стакана).\n"
         "SLIP/REAL NET/REAL PNL — с учётом VWAP-исполнения на "
         "POSITION_SIZE_USDT (реальная глубина стакана).\n"
-        "ID — подтверждение через CoinGecko, что тикер на обеих биржах — один "
-        "и тот же актив: ✅ подтверждено, ⚠️ не подтверждено (проверь вручную!), "
-        "? не проверялось (нет ключа CoinGecko или сеть недоступна)."
+        "ID — подтверждение через CoinGecko: ✅ подтверждено, ⚠️ не подтверждено, "
+        "? не проверялось (нет ключа/сеть/лимит запросов). CoinGecko видит в "
+        "основном spot-листинги — для чисто-фьючерсных пар и токенизированных "
+        "акций (тикеры вроде TQQQ, NVDL, SMCI) ⚠️/? не обязательно значит "
+        "'разные активы', может просто значить 'не смогли проверить' — сверяй вручную."
     )
 
 
@@ -117,6 +119,14 @@ def print_funding_opportunities(opportunities):
             f"{item.short_funding_rate:>9.4f}%{item.long_funding_rate:>9.4f}%"
             f"{item.funding_spread:>9.4f}%  {identity_marker(item.identity_verified):<3}"
         )
+
+    print(
+        "\nID — подтверждение через CoinGecko: ✅ подтверждено, ⚠️ не подтверждено, "
+        "? не проверялось. Эта таблица сравнивает только фьючерсные стороны — "
+        "CoinGecko же в основном видит spot-листинги, поэтому здесь ⚠️/? "
+        "встречается гораздо чаще и не обязательно значит 'разные активы' — "
+        "проверяй вручную, особенно для не-крипто тикеров (акции/ETF)."
+    )
 
 
 async def main(args):
@@ -171,6 +181,23 @@ async def main(args):
         # ----------------------------------------
 
         if COINGECKO_API_KEY:
+            unique_checks = {
+                (opp.coin.upper(), frozenset({opp.buy_exchange, opp.sell_exchange}))
+                for opp in opportunities[:PRINT_LIMIT]
+            } | {
+                (fopp.coin.upper(), frozenset({fopp.short_exchange, fopp.long_exchange}))
+                for fopp in funding_opportunities[:PRINT_LIMIT]
+            }
+            # На пару обычно уходит 2 запроса (по одному на биржу) + 2 разовых
+            # на справочники CoinGecko; при большом количестве уникальных пар
+            # и лимите биржи это может занять заметное время.
+            estimated_seconds = len(unique_checks) * 2 / COINGECKO_RATE_LIMIT_PER_MINUTE * 60
+            logger.info(
+                "CoinGecko: проверка идентичности для %d уникальных пар "
+                "(монета+биржи), ориентировочно ~%.0f сек при лимите %d/мин",
+                len(unique_checks), estimated_seconds, COINGECKO_RATE_LIMIT_PER_MINUTE,
+            )
+
             async with CoinIdentityChecker(COINGECKO_API_KEY) as identity_checker:
                 for opp in opportunities[:PRINT_LIMIT]:
                     opp.identity_verified = await identity_checker.verify(

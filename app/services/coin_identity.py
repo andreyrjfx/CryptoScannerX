@@ -1,7 +1,10 @@
 import asyncio
+import collections
 import logging
+import time
 
 from app.clients.http import HttpClient
+from app.config import COINGECKO_RATE_LIMIT_PER_MINUTE
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,34 @@ EXCHANGE_NAME_HINTS = {
     "bybit": "bybit",
     "mexc": "mexc",
 }
+
+
+class _RateLimiter:
+    """
+    Не больше `limit` вызовов за скользящее окно в 60 секунд. Без этого
+    CoinGecko быстро отвечает 429 Too Many Requests при большом количестве
+    проверяемых монет (полный скан рынка без фильтра) — и вся проверка
+    идентичности для этого прогона проваливается впустую.
+    """
+
+    def __init__(self, limit_per_minute, window_seconds=60):
+        self.limit = limit_per_minute
+        self.window_seconds = window_seconds
+        self._timestamps = collections.deque()
+        self._lock = asyncio.Lock()
+
+    async def acquire(self):
+        async with self._lock:
+            while True:
+                now = time.monotonic()
+                while self._timestamps and now - self._timestamps[0] >= self.window_seconds:
+                    self._timestamps.popleft()
+
+                if len(self._timestamps) < self.limit:
+                    self._timestamps.append(now)
+                    return
+
+                await asyncio.sleep(self.window_seconds - (now - self._timestamps[0]) + 0.05)
 
 
 class CoinIdentityChecker:
@@ -35,10 +66,11 @@ class CoinIdentityChecker:
     не путать с False ("проверили и не совпадает").
     """
 
-    def __init__(self, api_key, http=None):
+    def __init__(self, api_key, http=None, rate_limit_per_minute=COINGECKO_RATE_LIMIT_PER_MINUTE):
         self.api_key = api_key
         self.http = http or HttpClient()
         self._owns_http = http is None
+        self._rate_limiter = _RateLimiter(rate_limit_per_minute)
 
         self._coins_by_symbol = None   # symbol(lower) -> [coingecko_id, ...]
         self._exchange_ids = None      # наше имя биржи -> coingecko exchange id
@@ -55,6 +87,7 @@ class CoinIdentityChecker:
             await self.http.close()
 
     async def _get(self, path, params=None):
+        await self._rate_limiter.acquire()
         headers = {"x-cg-demo-api-key": self.api_key}
         return await self.http.get_json(f"{COINGECKO_BASE_URL}{path}", params=params, headers=headers)
 

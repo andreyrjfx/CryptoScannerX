@@ -1,4 +1,4 @@
-from app.services.coin_identity import CoinIdentityChecker
+from app.services.coin_identity import CoinIdentityChecker, _RateLimiter
 from tests.conftest import FakeHttpClient
 
 
@@ -136,3 +136,52 @@ async def test_missing_registries_return_none_gracefully():
     result = await checker.verify("LA", {"binance", "mexc"})
 
     assert result is None
+
+
+class TestRateLimiter:
+
+    async def test_allows_calls_up_to_limit_without_delay(self):
+        import time
+
+        limiter = _RateLimiter(limit_per_minute=3, window_seconds=10)
+        start = time.monotonic()
+
+        for _ in range(3):
+            await limiter.acquire()
+
+        assert time.monotonic() - start < 0.5  # первые 3 вызова — без ожидания
+
+    async def test_blocks_once_limit_is_reached_within_window(self):
+        import time
+
+        limiter = _RateLimiter(limit_per_minute=2, window_seconds=0.3)
+        start = time.monotonic()
+
+        await limiter.acquire()
+        await limiter.acquire()
+        await limiter.acquire()  # третий вызов должен подождать, пока окно не освободится
+
+        elapsed = time.monotonic() - start
+        assert elapsed >= 0.25  # с запасом ниже полного окна, но заметно больше нуля
+
+    async def test_identity_checker_respects_rate_limit(self):
+        """
+        Регрессионный тест: раньше CoinIdentityChecker вообще не троттлился,
+        из-за чего полный скан рынка мгновенно упирался в 429 Too Many Requests
+        от CoinGecko. Проверяем, что запросы реально проходят через лимитер.
+        """
+        coins_list = [{"id": "la-token", "symbol": "la", "name": "LA Token"}]
+        exchanges_list = [
+            {"id": "binance", "name": "Binance"},
+            {"id": "mexc_global", "name": "MEXC Global"},
+        ]
+        http = build_http(coins_list, exchanges_list, {
+            ("binance", "la-token"): True,
+            ("mexc_global", "la-token"): True,
+        })
+
+        checker = CoinIdentityChecker(api_key="fake-key", http=http, rate_limit_per_minute=1000)
+        assert checker._rate_limiter.limit == 1000
+
+        result = await checker.verify("LA", {"binance", "mexc"})
+        assert result is True
