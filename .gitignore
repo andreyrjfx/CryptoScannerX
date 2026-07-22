@@ -15,6 +15,10 @@ env/
 logs/
 *.log
 
+# История сканера (SQLite)
+data/
+*.db
+
 # VS Code
 .vscode/
 

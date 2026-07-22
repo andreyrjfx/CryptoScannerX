@@ -14,6 +14,7 @@ from app.services.funding_enricher import MexcFundingEnricher
 from app.services.funding_scanner import FundingScanner
 from app.services.depth_checker import DepthChecker
 from app.services.coin_identity import CoinIdentityChecker
+from app.services.history_store import HistoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,10 @@ def parse_args():
     )
     parser.add_argument(
         "--version", action="version", version=f"CryptoScannerX {__version__}",
+    )
+    parser.add_argument(
+        "--history", type=int, nargs="?", const=20, metavar="N", default=None,
+        help="Показать последние N записей из истории (по умолчанию 20) вместо обычного скана",
     )
     return parser.parse_args()
 
@@ -129,7 +134,52 @@ def print_funding_opportunities(opportunities):
     )
 
 
+def print_history(history_store, limit):
+    arbitrage_rows = history_store.recent_arbitrage(limit)
+    funding_rows = history_store.recent_funding(limit)
+
+    print("\n==============================================================")
+    print(f"ИСТОРИЯ — последние {limit} записей")
+    print("==============================================================\n")
+
+    print(f"-- ARBITRAGE ({len(arbitrage_rows)}) --\n")
+    if not arbitrage_rows:
+        print("Пусто.")
+    else:
+        print(
+            f"{'RUN AT':<20}{'TYPE':<16}{'COIN':<10}{'BUY':<20}{'SELL':<20}"
+            f"{'NET':>8}{'REAL NET':>10}  {'ID':<3}"
+        )
+        print("-" * 107)
+        for row in arbitrage_rows:
+            buy = f"{row['buy_exchange']} {row['buy_market']}"
+            sell = f"{row['sell_exchange']} {row['sell_market']}"
+            real_net = f"{row['real_net_spread']:>9.2f}%" if row["real_net_spread"] is not None else f"{'—':>10}"
+            print(
+                f"{row['run_at'][:19]:<20}{row['trade_type']:<16}{row['coin']:<10}"
+                f"{buy:<20}{sell:<20}{row['net_spread']:>7.2f}%{real_net}  "
+                f"{identity_marker(row['identity_verified']):<3}"
+            )
+
+    print(f"\n-- FUNDING ARBITRAGE ({len(funding_rows)}) --\n")
+    if not funding_rows:
+        print("Пусто.")
+    else:
+        print(f"{'RUN AT':<20}{'COIN':<10}{'SHORT':<14}{'LONG':<14}{'SPREAD %':>10}  {'ID':<3}")
+        print("-" * 74)
+        for row in funding_rows:
+            print(
+                f"{row['run_at'][:19]:<20}{row['coin']:<10}{row['short_exchange']:<14}"
+                f"{row['long_exchange']:<14}{row['funding_spread']:>9.4f}%  "
+                f"{identity_marker(row['identity_verified']):<3}"
+            )
+
+
 async def main(args):
+    if args.history is not None:
+        print_history(HistoryStore(), args.history)
+        return
+
     coins = [c.upper() for c in args.coins] if args.coins else FILTER_COINS
 
     logger.info("Фильтр монет: %s", ", ".join(coins) if coins else "весь рынок")
@@ -212,6 +262,10 @@ async def main(args):
                 "COINGECKO_API_KEY не задан — проверка идентичности актива пропущена "
                 "(см. .env.example). Колонка ID будет показывать '?' для всех строк.",
             )
+
+        history_store = HistoryStore()
+        history_store.save_arbitrage(opportunities)
+        history_store.save_funding(funding_opportunities)
 
         print_opportunities(opportunities)
         print_funding_opportunities(funding_opportunities)

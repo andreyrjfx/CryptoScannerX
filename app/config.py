@@ -55,3 +55,6 @@ EXCHANGES = {
         "options": {"defaultType": "swap"},
     },
 }
+
+# Путь к SQLite базе истории найденных возможностей
+HISTORY_DB_PATH = "data/scanner.db"
