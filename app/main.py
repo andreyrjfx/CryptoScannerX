@@ -3,7 +3,7 @@ import asyncio
 import logging
 
 from app.__version__ import __version__
-from app.config import FILTER_COINS
+from app.config import FILTER_COINS, COINGECKO_API_KEY
 from app.clients.http import HttpClient
 from app.exchanges.manager import ExchangeManager
 
@@ -13,6 +13,7 @@ from app.services.arbitrage_scanner import ArbitrageScanner
 from app.services.funding_enricher import MexcFundingEnricher
 from app.services.funding_scanner import FundingScanner
 from app.services.depth_checker import DepthChecker
+from app.services.coin_identity import CoinIdentityChecker
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,15 @@ def parse_args():
     return parser.parse_args()
 
 
+def identity_marker(value):
+    """✅ подтверждено CoinGecko, ⚠️ не подтверждено (риск разных активов), ? не проверялось."""
+    if value is True:
+        return "✅"
+    if value is False:
+        return "⚠️"
+    return "?"
+
+
 def print_opportunities(opportunities):
     print("\n==============================================================")
     print("ARBITRAGE")
@@ -50,9 +60,9 @@ def print_opportunities(opportunities):
     print(
         f"{'TYPE':<16}{'COIN':<10}{'BUY':<24}{'SELL':<24}"
         f"{'RAW':>8}{'FEE':>8}{'NET':>8}{'PNL':>10}"
-        f"{'SLIP':>8}{'REAL NET':>10}{'REAL PNL':>10}"
+        f"{'SLIP':>8}{'REAL NET':>10}{'REAL PNL':>10}  {'ID':<3}"
     )
-    print("-" * 138)
+    print("-" * 141)
 
     for item in opportunities[:PRINT_LIMIT]:
         buy = f"{item.buy_exchange} {item.buy_market}"
@@ -72,13 +82,16 @@ def print_opportunities(opportunities):
             f"{item.trade_type:<16}{item.coin:<10}{buy:<24}{sell:<24}"
             f"{item.spread:>7.2f}%{item.fee_percent:>7.2f}%"
             f"{item.net_spread:>7.2f}%{item.expected_profit_usdt:>9.2f}"
-            f"{slip}{real_net}{real_pnl}"
+            f"{slip}{real_net}{real_pnl}  {identity_marker(item.identity_verified):<3}"
         )
 
     print(
         "\nRAW/FEE/NET/PNL — по top-of-book цене (без учёта глубины стакана).\n"
         "SLIP/REAL NET/REAL PNL — с учётом VWAP-исполнения на "
-        "POSITION_SIZE_USDT (реальная глубина стакана)."
+        "POSITION_SIZE_USDT (реальная глубина стакана).\n"
+        "ID — подтверждение через CoinGecko, что тикер на обеих биржах — один "
+        "и тот же актив: ✅ подтверждено, ⚠️ не подтверждено (проверь вручную!), "
+        "? не проверялось (нет ключа CoinGecko или сеть недоступна)."
     )
 
 
@@ -94,15 +107,15 @@ def print_funding_opportunities(opportunities):
 
     print(
         f"{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
-        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}"
+        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}  {'ID':<3}"
     )
-    print("-" * 68)
+    print("-" * 71)
 
     for item in opportunities[:50]:
         print(
             f"{item.coin:<10}{item.short_exchange:<14}{item.long_exchange:<14}"
             f"{item.short_funding_rate:>9.4f}%{item.long_funding_rate:>9.4f}%"
-            f"{item.funding_spread:>9.4f}%"
+            f"{item.funding_spread:>9.4f}%  {identity_marker(item.identity_verified):<3}"
         )
 
 
@@ -138,8 +151,6 @@ async def main(args):
         # попадут в таблицу — запрос стакана это отдельный вызов на символ.
         await DepthChecker().check(opportunities[:PRINT_LIMIT])
 
-        print_opportunities(opportunities)
-
         # ----------------------------------------
         # Funding rate арбитраж
         # ----------------------------------------
@@ -155,6 +166,27 @@ async def main(args):
         funding_scanner = FundingScanner(tickers)
         funding_opportunities = funding_scanner.scan()
 
+        # ----------------------------------------
+        # Проверка идентичности актива (CoinGecko)
+        # ----------------------------------------
+
+        if COINGECKO_API_KEY:
+            async with CoinIdentityChecker(COINGECKO_API_KEY) as identity_checker:
+                for opp in opportunities[:PRINT_LIMIT]:
+                    opp.identity_verified = await identity_checker.verify(
+                        opp.coin, {opp.buy_exchange, opp.sell_exchange},
+                    )
+                for fopp in funding_opportunities[:PRINT_LIMIT]:
+                    fopp.identity_verified = await identity_checker.verify(
+                        fopp.coin, {fopp.short_exchange, fopp.long_exchange},
+                    )
+        else:
+            logger.warning(
+                "COINGECKO_API_KEY не задан — проверка идентичности актива пропущена "
+                "(см. .env.example). Колонка ID будет показывать '?' для всех строк.",
+            )
+
+        print_opportunities(opportunities)
         print_funding_opportunities(funding_opportunities)
 
     finally:

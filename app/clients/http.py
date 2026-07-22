@@ -16,7 +16,7 @@ class HttpClient:
             await self.session.close()
             self.session = None
 
-    async def get_json(self, url, params=None):
-        async with self.session.get(url, params=params, timeout=20) as response:
+    async def get_json(self, url, params=None, headers=None):
+        async with self.session.get(url, params=params, headers=headers, timeout=20) as response:
             response.raise_for_status()
             return await response.json()

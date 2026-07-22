@@ -21,3 +21,6 @@ class FundingOpportunity:
 
     # short_funding_rate - long_funding_rate (%), за один период
     funding_spread: float
+
+    # True/False/None — заполняется CoinIdentityChecker'ом (None = не проверялось)
+    identity_verified: bool = None

@@ -38,3 +38,6 @@ class Opportunity:
     real_net_spread: float = None
     real_expected_profit_usdt: float = None
     depth_filled: float = None
+
+    # True/False/None — заполняется CoinIdentityChecker'ом (None = не проверялось)
+    identity_verified: bool = None
