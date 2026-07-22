@@ -162,7 +162,12 @@ class HistoryStore:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT * FROM arbitrage_history ORDER BY id DESC LIMIT ?", (limit,),
+                """
+                SELECT * FROM arbitrage_history
+                ORDER BY run_at DESC, net_spread DESC
+                LIMIT ?
+                """,
+                (limit,),
             )
             rows = [dict(row) for row in cursor.fetchall()]
 
@@ -174,7 +179,12 @@ class HistoryStore:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT * FROM funding_history ORDER BY id DESC LIMIT ?", (limit,),
+                """
+                SELECT * FROM funding_history
+                ORDER BY run_at DESC, funding_spread DESC
+                LIMIT ?
+                """,
+                (limit,),
             )
             rows = [dict(row) for row in cursor.fetchall()]
 

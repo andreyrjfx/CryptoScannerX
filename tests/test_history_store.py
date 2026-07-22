@@ -124,6 +124,28 @@ def test_multiple_opportunities_in_one_run_share_run_at():
     assert rows[0]["run_at"] == rows[1]["run_at"]
 
 
+def test_within_same_run_ordered_best_spread_first_regardless_of_insert_order():
+    """
+    Регрессионный тест: раньше recent_arbitrage() сортировал по id DESC —
+    это переворачивало порядок строк внутри одного запуска (последняя
+    вставленная запись оказывалась первой), из-за чего в истории лучший
+    спред показывался последним, а не первым, как в живом выводе.
+    """
+    store = make_store()
+    # Намеренно вставляем в "неправильном" порядке — от худшего к лучшему,
+    # как если бы список не был предварительно отсортирован
+    opps = [
+        make_opportunity(coin="WORST", net_spread=0.5),
+        make_opportunity(coin="MIDDLE", net_spread=2.0),
+        make_opportunity(coin="BEST", net_spread=5.0),
+    ]
+
+    store.save_arbitrage(opps)
+    rows = store.recent_arbitrage()
+
+    assert [row["coin"] for row in rows] == ["BEST", "MIDDLE", "WORST"]
+
+
 def test_reopening_existing_db_does_not_lose_data():
     fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
