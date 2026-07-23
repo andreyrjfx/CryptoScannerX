@@ -66,7 +66,7 @@ def test_save_and_read_arbitrage_opportunity():
 
 def test_save_and_read_funding_opportunity():
     store = make_store()
-    fopp = make_funding_opportunity(identity_verified=False)
+    fopp = make_funding_opportunity(identity_verified=False, fee_percent=0.105, breakeven_periods=1.5)
 
     store.save_funding([fopp])
     rows = store.recent_funding()
@@ -77,6 +77,8 @@ def test_save_and_read_funding_opportunity():
     assert row["short_exchange"] == "binance"
     assert row["long_exchange"] == "bybit"
     assert abs(row["funding_spread"] - 0.07) < 1e-9
+    assert abs(row["fee_percent"] - 0.105) < 1e-9
+    assert abs(row["breakeven_periods"] - 1.5) < 1e-9
     assert row["identity_verified"] is False
 
 
@@ -209,12 +211,18 @@ def test_migrates_old_database_missing_funding_time_columns():
     conn.close()
 
     # HistoryStore должен открыть эту базу, донабрать недостающие колонки
-    # и успешно записать новую возможность с funding time
+    # и успешно записать новую возможность с funding time и комиссией
     store = HistoryStore(db_path=path)
-    fopp = make_funding_opportunity(short_next_funding_time=1700000000000, long_next_funding_time=1700003600000)
+    fopp = make_funding_opportunity(
+        short_next_funding_time=1700000000000, long_next_funding_time=1700003600000,
+        fee_percent=0.105, breakeven_periods=1.5,
+    )
     store.save_funding([fopp])
 
     rows = store.recent_funding()
     assert len(rows) == 1
     assert rows[0]["short_next_funding_time"] == 1700000000000
+    assert rows[0]["long_next_funding_time"] == 1700003600000
+    assert abs(rows[0]["fee_percent"] - 0.105) < 1e-9
+    assert abs(rows[0]["breakeven_periods"] - 1.5) < 1e-9
     assert rows[0]["long_next_funding_time"] == 1700003600000

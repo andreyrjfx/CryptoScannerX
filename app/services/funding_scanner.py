@@ -2,6 +2,7 @@ from itertools import combinations
 
 from app.config import MIN_VOLUME_USDT, MIN_FUNDING_SPREAD
 from app.models.funding_opportunity import FundingOpportunity
+from app.calculators.fee_calculator import FeeCalculator
 
 
 class FundingScanner:
@@ -15,6 +16,7 @@ class FundingScanner:
     def __init__(self, tickers, min_spread=MIN_FUNDING_SPREAD):
         self.tickers = [t for t in tickers if t.market == "future"]
         self.min_spread = min_spread
+        self.fees = FeeCalculator()
 
     def scan(self):
         grouped = {}
@@ -48,6 +50,14 @@ class FundingScanner:
         if spread < self.min_spread:
             return
 
+        # Разовая комиссия на открытие обеих ног (шорт+лонг) — funding_spread
+        # начисляется каждый период, а комиссия платится один раз при входе.
+        _, _, fee_percent = self.fees.calculate(
+            buy_exchange=long_side.exchange, buy_market="future",
+            sell_exchange=short_side.exchange, sell_market="future",
+        )
+        breakeven_periods = fee_percent / spread if spread > 0 else None
+
         opportunities.append(FundingOpportunity(
             coin=short_side.coin,
             short_exchange=short_side.exchange,
@@ -57,6 +67,8 @@ class FundingScanner:
             long_funding_rate=long_side.funding_rate,
             long_volume=long_side.volume_usdt,
             funding_spread=spread,
+            fee_percent=fee_percent,
+            breakeven_periods=breakeven_periods,
             short_next_funding_time=short_side.next_funding_time,
             long_next_funding_time=long_side.next_funding_time,
         ))

@@ -106,3 +106,55 @@ def test_implausibly_large_spread_is_filtered_out():
     opportunities = ArbitrageScanner(tickers).scan()
 
     assert opportunities == []
+
+
+def test_spot_spot_is_excluded_by_default_short_spot_not_possible():
+    """
+    На большинстве бирж нельзя шортить спот (продать актив, которого нет)
+    обычным способом — spot-spot арбитраж всегда требует шорта одной из ног.
+    """
+    tickers = [
+        make_ticker(exchange="binance", market="spot", coin="BTC", bid=100, ask=100.1),
+        make_ticker(exchange="bybit", market="spot", coin="BTC", bid=101, ask=101.1),
+    ]
+
+    opportunities = ArbitrageScanner(tickers).scan()
+
+    assert opportunities == []
+
+
+def test_future_spot_excluded_but_spot_future_kept():
+    """
+    "future-spot" (продажная нога — спот) требует шорта спота и исключается.
+    "spot-future" (продажная нога — фьючерс) шортит фьючерс — это стандартно
+    и доступно всегда, такие сделки остаются.
+    """
+    tickers = [
+        make_ticker(exchange="binance", market="spot", coin="BTC", bid=100, ask=100.1),
+        make_ticker(exchange="bybit", market="future", coin="BTC", bid=105, ask=105.1),
+    ]
+
+    opportunities = ArbitrageScanner(tickers).scan()
+
+    assert len(opportunities) == 1
+    assert opportunities[0].trade_type == "spot-future"
+    assert opportunities[0].sell_market == "future"
+
+
+def test_allow_short_spot_flag_reenables_spot_short_trades():
+    import app.services.arbitrage_scanner as scanner_module
+    original = scanner_module.ALLOW_SHORT_SPOT
+    scanner_module.ALLOW_SHORT_SPOT = True
+
+    try:
+        tickers = [
+            make_ticker(exchange="binance", market="spot", coin="BTC", bid=100, ask=100.1),
+            make_ticker(exchange="bybit", market="spot", coin="BTC", bid=101, ask=101.1),
+        ]
+
+        opportunities = ArbitrageScanner(tickers).scan()
+
+        assert len(opportunities) == 1
+        assert opportunities[0].trade_type == "spot-spot"
+    finally:
+        scanner_module.ALLOW_SHORT_SPOT = original

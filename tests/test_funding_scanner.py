@@ -94,3 +94,30 @@ def test_next_funding_time_is_propagated_from_both_sides():
     opp = opportunities[0]
     assert opp.short_next_funding_time == 1700000000000
     assert opp.long_next_funding_time == 1700003600000
+
+
+def test_fee_percent_is_sum_of_both_futures_legs():
+    tickers = [
+        make_ticker(exchange="binance", market="future", coin="BTC", funding_rate=0.05),
+        make_ticker(exchange="bybit", market="future", coin="BTC", funding_rate=-0.02),
+    ]
+
+    opportunities = FundingScanner(tickers, min_spread=0.01).scan()
+
+    assert len(opportunities) == 1
+    opp = opportunities[0]
+    # binance future 0.05% + bybit future 0.055% (см. FeeCalculator.FEES)
+    assert abs(opp.fee_percent - 0.105) < 1e-9
+
+
+def test_breakeven_periods_is_fee_divided_by_spread():
+    tickers = [
+        make_ticker(exchange="binance", market="future", coin="BTC", funding_rate=0.05),
+        make_ticker(exchange="bybit", market="future", coin="BTC", funding_rate=-0.02),
+    ]
+
+    opportunities = FundingScanner(tickers, min_spread=0.01).scan()
+
+    opp = opportunities[0]
+    assert opp.funding_spread == 0.07
+    assert abs(opp.breakeven_periods - (opp.fee_percent / 0.07)) < 1e-9

@@ -113,7 +113,9 @@ def print_opportunities(opportunities):
         "? не проверялось (нет ключа/сеть/лимит запросов). CoinGecko видит в "
         "основном spot-листинги — для чисто-фьючерсных пар и токенизированных "
         "акций (тикеры вроде TQQQ, NVDL, SMCI) ⚠️/? не обязательно значит "
-        "'разные активы', может просто значить 'не смогли проверить' — сверяй вручную."
+        "'разные активы', может просто значить 'не смогли проверить' — сверяй вручную.\n"
+        "Сделки, где шортится спот (spot-spot и часть future-spot/basis), "
+        "по умолчанию не показываются — см. ALLOW_SHORT_SPOT в config.py."
     )
 
 
@@ -129,26 +131,31 @@ def print_funding_opportunities(opportunities):
 
     print(
         f"{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
-        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}"
+        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}{'FEE':>8}{'B/E':>6}"
         f"{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
     )
-    print("-" * 91)
+    print("-" * 105)
 
     for item in opportunities[:50]:
+        breakeven = f"{item.breakeven_periods:>5.1f}" if item.breakeven_periods is not None else f"{'—':>5}"
         print(
             f"{item.coin:<10}{item.short_exchange:<14}{item.long_exchange:<14}"
             f"{item.short_funding_rate:>9.4f}%{item.long_funding_rate:>9.4f}%"
-            f"{item.funding_spread:>9.4f}%"
+            f"{item.funding_spread:>9.4f}%{item.fee_percent:>7.2f}%{breakeven}"
             f"{format_time_until(item.short_next_funding_time):>10}"
             f"{format_time_until(item.long_next_funding_time):>10}  "
             f"{identity_marker(item.identity_verified):<3}"
         )
 
     print(
-        "\nSHORT IN/LONG IN — время до следующего начисления funding на каждой "
+        "\nFEE — разовая комиссия на открытие обеих ног (шорт+лонг), % от объёма "
+        "(закрытие позже — ещё одна такая же комиссия, здесь не учтена).\n"
+        "B/E (breakeven) — сколько периодов начисления нужно продержать позицию, "
+        "чтобы funding окупил комиссию на вход. Периоды у разных бирж могут "
+        "отличаться по длительности (обычно 8ч, у части монет 1ч/4ч).\n"
+        "SHORT IN/LONG IN — время до следующего начисления funding на каждой "
         "стороне. Расписания начисления у разных бирж/символов могут не "
-        "совпадать (обычно 8ч, но у части монет 1ч/4ч) — поэтому две колонки, "
-        "а не одна.\n"
+        "совпадать — поэтому две колонки, а не одна.\n"
         "ID — подтверждение через CoinGecko: ✅ подтверждено, ⚠️ не подтверждено, "
         "? не проверялось. Эта таблица сравнивает только фьючерсные стороны — "
         "CoinGecko же в основном видит spot-листинги, поэтому здесь ⚠️/? "
@@ -190,13 +197,16 @@ def print_history(history_store, limit):
     else:
         print(
             f"{'RUN AT':<20}{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
-            f"{'SPREAD %':>10}{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
+            f"{'SPREAD %':>10}{'FEE':>8}{'B/E':>6}{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
         )
-        print("-" * 94)
+        print("-" * 108)
         for row in funding_rows:
+            fee = f"{row['fee_percent']:>6.2f}%" if row["fee_percent"] is not None else f"{'—':>7}"
+            breakeven = f"{row['breakeven_periods']:>5.1f}" if row["breakeven_periods"] is not None else f"{'—':>5}"
             print(
                 f"{row['run_at'][:19]:<20}{row['coin']:<10}{row['short_exchange']:<14}"
                 f"{row['long_exchange']:<14}{row['funding_spread']:>9.4f}%"
+                f"{fee}{breakeven}"
                 f"{format_time_until(row['short_next_funding_time']):>10}"
                 f"{format_time_until(row['long_next_funding_time']):>10}  "
                 f"{identity_marker(row['identity_verified']):<3}"

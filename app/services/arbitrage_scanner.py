@@ -1,7 +1,7 @@
 from itertools import combinations
 import logging
 
-from app.config import MIN_SPREAD, DISPLAY_SPREAD, MIN_VOLUME_USDT, MAX_SANE_SPREAD
+from app.config import MIN_SPREAD, DISPLAY_SPREAD, MIN_VOLUME_USDT, MAX_SANE_SPREAD, ALLOW_SHORT_SPOT
 from app.models.opportunity import Opportunity
 from app.calculators.trade_calculator import TradeCalculator
 
@@ -9,6 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class ArbitrageScanner:
+    """
+    Ищет спред между парами тикеров (buy - открываем длинную позицию,
+    sell - закрываем/шортим). По умолчанию (ALLOW_SHORT_SPOT=False)
+    исключаются сделки, где sell.market == "spot" — это означало бы шорт
+    спота (продажу актива, которого нет), что обычным способом на биржах
+    недоступно. Поэтому "spot-spot" и "future-spot" по умолчанию не
+    встречаются в выдаче — остаются только сделки, где шортится фьючерс
+    (spot-future, future-future, часть basis).
+    """
 
     def __init__(self, tickers, coins=None):
         self.tickers = tickers
@@ -61,6 +70,12 @@ class ArbitrageScanner:
 
     def _check(self, opportunities, buy, sell):
         if buy.exchange == sell.exchange and buy.market == sell.market:
+            return
+
+        if not ALLOW_SHORT_SPOT and sell.market == "spot":
+            # "Продажная" нога — спот, то есть нужно шортить актив, которого
+            # нет. Обычным способом на большинстве бирж это невозможно, а
+            # маржинальный шорт (с процентами по займу) мы не считаем.
             return
 
         if buy.ask <= 0 or sell.bid <= 0:
