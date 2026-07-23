@@ -46,9 +46,11 @@ CREATE TABLE IF NOT EXISTS funding_history (
     short_exchange TEXT,
     short_funding_rate REAL,
     short_volume REAL,
+    short_next_funding_time INTEGER,
     long_exchange TEXT,
     long_funding_rate REAL,
     long_volume REAL,
+    long_next_funding_time INTEGER,
     funding_spread REAL,
     identity_verified INTEGER
 );
@@ -136,8 +138,8 @@ class HistoryStore:
         rows = [
             (
                 run_at, o.coin,
-                o.short_exchange, o.short_funding_rate, o.short_volume,
-                o.long_exchange, o.long_funding_rate, o.long_volume,
+                o.short_exchange, o.short_funding_rate, o.short_volume, o.short_next_funding_time,
+                o.long_exchange, o.long_funding_rate, o.long_volume, o.long_next_funding_time,
                 o.funding_spread, _bool_to_int(o.identity_verified),
             )
             for o in opportunities
@@ -148,10 +150,10 @@ class HistoryStore:
                 """
                 INSERT INTO funding_history (
                     run_at, coin,
-                    short_exchange, short_funding_rate, short_volume,
-                    long_exchange, long_funding_rate, long_volume,
+                    short_exchange, short_funding_rate, short_volume, short_next_funding_time,
+                    long_exchange, long_funding_rate, long_volume, long_next_funding_time,
                     funding_spread, identity_verified
-                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 rows,
             )

@@ -29,7 +29,9 @@ class BinanceFuturesAdapter(BaseExchangeAdapter):
         try:
             funding_map = await self.fetch_funding_map(self.PREMIUM_INDEX_URL)
             for ticker in tickers:
-                ticker.funding_rate = funding_map.get(ticker.symbol, 0.0)
+                rate, next_time = funding_map.get(ticker.symbol, (0.0, None))
+                ticker.funding_rate = rate
+                ticker.next_funding_time = next_time
         except Exception as exc:
             logger.warning("Binance Futures: не удалось получить funding rate: %s", exc)
 

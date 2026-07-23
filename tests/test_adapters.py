@@ -19,7 +19,7 @@ async def test_binance_futures_merges_book_stats_and_funding():
             {"symbol": "BTCUSDT", "quoteVolume": "1000000"},
         ],
         BinanceFuturesAdapter.PREMIUM_INDEX_URL: [
-            {"symbol": "BTCUSDT", "lastFundingRate": "0.0001"},
+            {"symbol": "BTCUSDT", "lastFundingRate": "0.0001", "nextFundingTime": 1700000000000},
         ],
     })
 
@@ -34,6 +34,7 @@ async def test_binance_futures_merges_book_stats_and_funding():
     assert ticker.ask == 50010.0
     assert ticker.volume_usdt == 1_000_000.0
     assert ticker.funding_rate == 0.01
+    assert ticker.next_funding_time == 1700000000000
 
 
 async def test_binance_futures_survives_funding_endpoint_failure():
@@ -74,6 +75,7 @@ async def test_bybit_futures_extracts_funding_rate():
             {
                 "symbol": "ETHUSDT", "bid1Price": "3000", "ask1Price": "3001",
                 "lastPrice": "3000.5", "turnover24h": "2000000", "fundingRate": "-0.005",
+                "nextFundingTime": "1700000000000",
             },
         ]}},
     })
@@ -82,6 +84,7 @@ async def test_bybit_futures_extracts_funding_rate():
 
     assert len(tickers) == 1
     assert tickers[0].funding_rate == -0.5
+    assert tickers[0].next_funding_time == 1700000000000
 
 
 async def test_bybit_spot_has_no_funding_rate():
@@ -136,11 +139,12 @@ async def test_mexc_funding_enricher_only_touches_mexc_futures():
     other_exchange_ticker = make_ticker(exchange="binance", market="future", coin="SOL", symbol="SOLUSDT")
 
     url = MexcFundingEnricher.URL_TEMPLATE.format(symbol="SOL_USDT")
-    http = FakeHttpClient({url: {"data": {"fundingRate": 0.00015}}})
+    http = FakeHttpClient({url: {"data": {"fundingRate": 0.00015, "nextSettleTime": 1700000000000}}})
 
     await MexcFundingEnricher(http).enrich([future_ticker, spot_ticker, other_exchange_ticker])
 
     assert future_ticker.funding_rate == 0.015
+    assert future_ticker.next_funding_time == 1700000000000
     assert spot_ticker.funding_rate == 0.0
     assert other_exchange_ticker.funding_rate == 0.0
     assert len(http.calls) == 1  # только один запрос — для future mexc тикера

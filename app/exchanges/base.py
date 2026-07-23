@@ -27,7 +27,7 @@ class BaseExchangeAdapter:
     def extract_coin(self, symbol: str) -> str:
         return symbol[: -len(self.SYMBOL_SUFFIX)]
 
-    def make_ticker(self, symbol, bid, ask, last, volume_usdt, funding_rate=0.0) -> Ticker:
+    def make_ticker(self, symbol, bid, ask, last, volume_usdt, funding_rate=0.0, next_funding_time=None) -> Ticker:
         coin = normalize_coin(self.extract_coin(symbol))
         return Ticker(
             exchange=self.NAME,
@@ -39,9 +39,10 @@ class BaseExchangeAdapter:
             last=last,
             volume_usdt=volume_usdt,
             funding_rate=funding_rate,
+            next_funding_time=next_funding_time,
         )
 
-    def _safe_ticker(self, symbol, bid_raw, ask_raw, last_raw, volume_raw, funding_raw=0.0):
+    def _safe_ticker(self, symbol, bid_raw, ask_raw, last_raw, volume_raw, funding_raw=0.0, next_funding_raw=None):
         try:
             bid = float(bid_raw)
             ask = float(ask_raw)
@@ -51,12 +52,17 @@ class BaseExchangeAdapter:
             logger.debug("%s: пропуск тикера %s (%s)", self.NAME, symbol, exc)
             return None
 
-        # Ошибка парсинга funding rate не должна ронять весь тикер —
-        # цена и объём для арбитража важнее funding.
+        # Ошибка парсинга funding rate/времени не должна ронять весь тикер —
+        # цена и объём для арбитража важнее.
         try:
             funding_rate = float(funding_raw or 0) * 100
         except (ValueError, TypeError):
             funding_rate = 0.0
+
+        try:
+            next_funding_time = int(next_funding_raw) if next_funding_raw else None
+        except (ValueError, TypeError):
+            next_funding_time = None
 
         return self.make_ticker(
             symbol=symbol,
@@ -65,21 +71,26 @@ class BaseExchangeAdapter:
             last=last,
             volume_usdt=volume,
             funding_rate=funding_rate,
+            next_funding_time=next_funding_time,
         )
 
     async def fetch_funding_map(self, url):
         """
-        Биржи с bulk-эндпоинтом funding rate (список {symbol, lastFundingRate}
-        по всем контрактам одним запросом).
+        Биржи с bulk-эндпоинтом funding rate (список {symbol, lastFundingRate,
+        nextFundingTime} по всем контрактам одним запросом).
+        Возвращает symbol -> (funding_rate_percent, next_funding_time_ms).
         """
         data = await self.http.get_json(url)
 
         funding = {}
         for item in data:
             try:
-                funding[item["symbol"]] = float(item["lastFundingRate"]) * 100
+                rate = float(item["lastFundingRate"]) * 100
             except (KeyError, ValueError, TypeError):
                 continue
+
+            next_time = item.get("nextFundingTime") or None
+            funding[item["symbol"]] = (rate, next_time)
 
         return funding
 
@@ -150,7 +161,7 @@ class BaseExchangeAdapter:
 
     async def fetch_flat_tickers(
         self, url, params, items_path, bid_key, ask_key, volume_key,
-        last_key=None, funding_key=None,
+        last_key=None, funding_key=None, funding_time_key=None,
     ):
         """
         Биржи, отдающие все нужные поля (bid/ask/last/volume[/funding]) одним эндпоинтом.
@@ -175,6 +186,7 @@ class BaseExchangeAdapter:
                 last_raw=item.get(last_key) if last_key else 0.0,
                 volume_raw=item.get(volume_key),
                 funding_raw=item.get(funding_key) if funding_key else 0.0,
+                next_funding_raw=item.get(funding_time_key) if funding_time_key else None,
             )
             if ticker:
                 tickers.append(ticker)

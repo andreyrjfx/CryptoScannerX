@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import time
 
 from app.__version__ import __version__
 from app.config import FILTER_COINS, COINGECKO_API_KEY, COINGECKO_RATE_LIMIT_PER_MINUTE
@@ -50,6 +51,20 @@ def identity_marker(value):
     if value is False:
         return "⚠️"
     return "?"
+
+
+def format_time_until(next_funding_time_ms):
+    """Unix ms -> 'Xh YYm' до начисления, или '—' если время неизвестно/уже прошло."""
+    if not next_funding_time_ms:
+        return "—"
+
+    remaining_seconds = next_funding_time_ms / 1000 - time.time()
+    if remaining_seconds <= 0:
+        return "—"
+
+    hours = int(remaining_seconds // 3600)
+    minutes = int((remaining_seconds % 3600) // 60)
+    return f"{hours}h{minutes:02d}m"
 
 
 def print_opportunities(opportunities):
@@ -114,19 +129,27 @@ def print_funding_opportunities(opportunities):
 
     print(
         f"{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
-        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}  {'ID':<3}"
+        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}"
+        f"{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
     )
-    print("-" * 71)
+    print("-" * 91)
 
     for item in opportunities[:50]:
         print(
             f"{item.coin:<10}{item.short_exchange:<14}{item.long_exchange:<14}"
             f"{item.short_funding_rate:>9.4f}%{item.long_funding_rate:>9.4f}%"
-            f"{item.funding_spread:>9.4f}%  {identity_marker(item.identity_verified):<3}"
+            f"{item.funding_spread:>9.4f}%"
+            f"{format_time_until(item.short_next_funding_time):>10}"
+            f"{format_time_until(item.long_next_funding_time):>10}  "
+            f"{identity_marker(item.identity_verified):<3}"
         )
 
     print(
-        "\nID — подтверждение через CoinGecko: ✅ подтверждено, ⚠️ не подтверждено, "
+        "\nSHORT IN/LONG IN — время до следующего начисления funding на каждой "
+        "стороне. Расписания начисления у разных бирж/символов могут не "
+        "совпадать (обычно 8ч, но у части монет 1ч/4ч) — поэтому две колонки, "
+        "а не одна.\n"
+        "ID — подтверждение через CoinGecko: ✅ подтверждено, ⚠️ не подтверждено, "
         "? не проверялось. Эта таблица сравнивает только фьючерсные стороны — "
         "CoinGecko же в основном видит spot-листинги, поэтому здесь ⚠️/? "
         "встречается гораздо чаще и не обязательно значит 'разные активы' — "
@@ -165,12 +188,17 @@ def print_history(history_store, limit):
     if not funding_rows:
         print("Пусто.")
     else:
-        print(f"{'RUN AT':<20}{'COIN':<10}{'SHORT':<14}{'LONG':<14}{'SPREAD %':>10}  {'ID':<3}")
-        print("-" * 74)
+        print(
+            f"{'RUN AT':<20}{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
+            f"{'SPREAD %':>10}{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
+        )
+        print("-" * 94)
         for row in funding_rows:
             print(
                 f"{row['run_at'][:19]:<20}{row['coin']:<10}{row['short_exchange']:<14}"
-                f"{row['long_exchange']:<14}{row['funding_spread']:>9.4f}%  "
+                f"{row['long_exchange']:<14}{row['funding_spread']:>9.4f}%"
+                f"{format_time_until(row['short_next_funding_time']):>10}"
+                f"{format_time_until(row['long_next_funding_time']):>10}  "
                 f"{identity_marker(row['identity_verified']):<3}"
             )
 

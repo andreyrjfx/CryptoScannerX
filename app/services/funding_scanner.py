@@ -57,4 +57,6 @@ class FundingScanner:
             long_funding_rate=long_side.funding_rate,
             long_volume=long_side.volume_usdt,
             funding_spread=spread,
+            short_next_funding_time=short_side.next_funding_time,
+            long_next_funding_time=long_side.next_funding_time,
         ))

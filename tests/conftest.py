@@ -30,6 +30,7 @@ def make_ticker(
     last=100.0,
     volume_usdt=1_000_000.0,
     funding_rate=0.0,
+    next_funding_time=None,
 ):
     return Ticker(
         exchange=exchange,
@@ -41,4 +42,5 @@ def make_ticker(
         last=last,
         volume_usdt=volume_usdt,
         funding_rate=funding_rate,
+        next_funding_time=next_funding_time,
     )

@@ -74,3 +74,23 @@ def test_results_sorted_by_spread_descending():
     spreads = [o.funding_spread for o in opportunities]
     assert spreads == sorted(spreads, reverse=True)
     assert opportunities[0].coin == "ETH"
+
+
+def test_next_funding_time_is_propagated_from_both_sides():
+    tickers = [
+        make_ticker(
+            exchange="binance", market="future", coin="BTC",
+            funding_rate=0.05, next_funding_time=1700000000000,
+        ),
+        make_ticker(
+            exchange="bybit", market="future", coin="BTC",
+            funding_rate=-0.02, next_funding_time=1700003600000,
+        ),
+    ]
+
+    opportunities = FundingScanner(tickers, min_spread=0.01).scan()
+
+    assert len(opportunities) == 1
+    opp = opportunities[0]
+    assert opp.short_next_funding_time == 1700000000000
+    assert opp.long_next_funding_time == 1700003600000

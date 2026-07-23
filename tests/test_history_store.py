@@ -80,6 +80,20 @@ def test_save_and_read_funding_opportunity():
     assert row["identity_verified"] is False
 
 
+def test_funding_opportunity_next_funding_time_round_trips():
+    store = make_store()
+    fopp = make_funding_opportunity(
+        short_next_funding_time=1700000000000,
+        long_next_funding_time=1700003600000,
+    )
+
+    store.save_funding([fopp])
+    rows = store.recent_funding()
+
+    assert rows[0]["short_next_funding_time"] == 1700000000000
+    assert rows[0]["long_next_funding_time"] == 1700003600000
+
+
 def test_identity_verified_none_is_preserved_as_none():
     store = make_store()
     opp = make_opportunity(identity_verified=None)

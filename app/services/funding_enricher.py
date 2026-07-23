@@ -64,7 +64,9 @@ class MexcFundingEnricher:
 
         try:
             response = await self.http.get_json(url)
-            ticker.funding_rate = float(response["data"]["fundingRate"]) * 100
+            data = response["data"]
+            ticker.funding_rate = float(data["fundingRate"]) * 100
+            ticker.next_funding_time = data.get("nextSettleTime") or None
             return True
         except Exception as exc:
             logger.debug("MEXC funding rate %s: %s", ticker.symbol, exc)

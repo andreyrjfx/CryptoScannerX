@@ -25,6 +25,7 @@ class BybitFuturesAdapter(BaseExchangeAdapter):
             last_key="lastPrice",
             volume_key="turnover24h",
             funding_key="fundingRate",
+            funding_time_key="nextFundingTime",
         )
 
         logger.info("Bybit Futures: получено %d", len(tickers))
