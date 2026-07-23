@@ -173,3 +173,48 @@ def test_reopening_existing_db_does_not_lose_data():
 
     assert len(rows) == 1
     assert rows[0]["coin"] == "BTC"
+
+
+def test_migrates_old_database_missing_funding_time_columns():
+    """
+    Регрессионный тест: база, созданная до появления next_funding_time
+    (v0.9.x), не имела колонок short_next_funding_time/long_next_funding_time.
+    CREATE TABLE IF NOT EXISTS их не добавляет — раньше это роняло
+    save_funding() с sqlite3.OperationalError на существующих базах.
+    """
+    import sqlite3
+
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    os.remove(path)
+
+    # Эмулируем старую базу — схема без колонок funding time
+    old_schema = """
+    CREATE TABLE funding_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_at TEXT NOT NULL,
+        coin TEXT,
+        short_exchange TEXT,
+        short_funding_rate REAL,
+        short_volume REAL,
+        long_exchange TEXT,
+        long_funding_rate REAL,
+        long_volume REAL,
+        funding_spread REAL,
+        identity_verified INTEGER
+    );
+    """
+    conn = sqlite3.connect(path)
+    conn.executescript(old_schema)
+    conn.close()
+
+    # HistoryStore должен открыть эту базу, донабрать недостающие колонки
+    # и успешно записать новую возможность с funding time
+    store = HistoryStore(db_path=path)
+    fopp = make_funding_opportunity(short_next_funding_time=1700000000000, long_next_funding_time=1700003600000)
+    store.save_funding([fopp])
+
+    rows = store.recent_funding()
+    assert len(rows) == 1
+    assert rows[0]["short_next_funding_time"] == 1700000000000
+    assert rows[0]["long_next_funding_time"] == 1700003600000

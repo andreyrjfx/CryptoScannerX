@@ -95,6 +95,22 @@ class HistoryStore:
     def _init_schema(self):
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            self._migrate(conn)
+
+    def _migrate(self, conn):
+        """
+        CREATE TABLE IF NOT EXISTS не добавляет новые колонки в уже
+        существующую таблицу — если база создана более старой версией
+        скрипта, донабираем недостающие колонки вручную.
+        """
+        self._add_column_if_missing(conn, "funding_history", "short_next_funding_time", "INTEGER")
+        self._add_column_if_missing(conn, "funding_history", "long_next_funding_time", "INTEGER")
+
+    @staticmethod
+    def _add_column_if_missing(conn, table, column, column_type):
+        existing_columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
     def save_arbitrage(self, opportunities):
         if not opportunities:
