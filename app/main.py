@@ -131,31 +131,39 @@ def print_funding_opportunities(opportunities):
 
     print(
         f"{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
-        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}{'FEE':>8}{'B/E':>6}"
+        f"{'SHORT %':>10}{'LONG %':>10}{'SPREAD %':>10}"
+        f"{'$/PERIOD':>10}{'FEE $':>8}{'NET(1st)':>10}{'B/E':>6}"
         f"{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
     )
-    print("-" * 105)
+    print("-" * 133)
 
     for item in opportunities[:50]:
         breakeven = f"{item.breakeven_periods:>5.1f}" if item.breakeven_periods is not None else f"{'—':>5}"
         print(
             f"{item.coin:<10}{item.short_exchange:<14}{item.long_exchange:<14}"
             f"{item.short_funding_rate:>9.4f}%{item.long_funding_rate:>9.4f}%"
-            f"{item.funding_spread:>9.4f}%{item.fee_percent:>7.2f}%{breakeven}"
+            f"{item.funding_spread:>9.4f}%"
+            f"{item.profit_per_period_usdt:>10.2f}{item.fee_usdt:>8.2f}"
+            f"{item.net_first_period_usdt:>10.2f}{breakeven}"
             f"{format_time_until(item.short_next_funding_time):>10}"
             f"{format_time_until(item.long_next_funding_time):>10}  "
             f"{identity_marker(item.identity_verified):<3}"
         )
 
     print(
-        "\nFEE — разовая комиссия на открытие обеих ног (шорт+лонг), % от объёма "
-        "(закрытие позже — ещё одна такая же комиссия, здесь не учтена).\n"
+        "\n$/PERIOD — валовая прибыль за один период начисления в USDT при "
+        "позиции POSITION_SIZE_USDT (повторяется каждый период, пока funding "
+        "rate не изменится). FEE $ — разовая комиссия на вход в USDT "
+        "(закрытие позже — ещё одна такая же, здесь не учтена).\n"
+        "NET(1st) — чистый результат, если продержать позицию ровно один "
+        "период ($/PERIOD - FEE $), может быть отрицательным. Чистый PnL за "
+        "N периодов ≈ $/PERIOD × N - FEE $.\n"
         "B/E (breakeven) — сколько периодов начисления нужно продержать позицию, "
         "чтобы funding окупил комиссию на вход. Периоды у разных бирж могут "
         "отличаться по длительности (обычно 8ч, у части монет 1ч/4ч).\n"
         "SHORT IN/LONG IN — время до следующего начисления funding на каждой "
-        "стороне. Расписания начисления у разных бирж/символов могут не "
-        "совпадать — поэтому две колонки, а не одна.\n"
+        "стороне (по умолчанию показываются только пары с совпадающим временем "
+        "выплаты — см. REQUIRE_MATCHING_FUNDING_TIME в config.py).\n"
         "ID — подтверждение через CoinGecko: ✅ подтверждено, ⚠️ не подтверждено, "
         "? не проверялось. Эта таблица сравнивает только фьючерсные стороны — "
         "CoinGecko же в основном видит spot-листинги, поэтому здесь ⚠️/? "
@@ -197,16 +205,19 @@ def print_history(history_store, limit):
     else:
         print(
             f"{'RUN AT':<20}{'COIN':<10}{'SHORT':<14}{'LONG':<14}"
-            f"{'SPREAD %':>10}{'FEE':>8}{'B/E':>6}{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
+            f"{'SPREAD %':>10}{'$/PERIOD':>10}{'FEE $':>8}{'NET(1st)':>10}{'B/E':>6}"
+            f"{'SHORT IN':>10}{'LONG IN':>10}  {'ID':<3}"
         )
-        print("-" * 108)
+        print("-" * 136)
         for row in funding_rows:
-            fee = f"{row['fee_percent']:>6.2f}%" if row["fee_percent"] is not None else f"{'—':>7}"
+            profit = f"{row['profit_per_period_usdt']:>9.2f}" if row["profit_per_period_usdt"] is not None else f"{'—':>9}"
+            fee = f"{row['fee_usdt']:>7.2f}" if row["fee_usdt"] is not None else f"{'—':>7}"
+            net_first = f"{row['net_first_period_usdt']:>9.2f}" if row["net_first_period_usdt"] is not None else f"{'—':>9}"
             breakeven = f"{row['breakeven_periods']:>5.1f}" if row["breakeven_periods"] is not None else f"{'—':>5}"
             print(
                 f"{row['run_at'][:19]:<20}{row['coin']:<10}{row['short_exchange']:<14}"
                 f"{row['long_exchange']:<14}{row['funding_spread']:>9.4f}%"
-                f"{fee}{breakeven}"
+                f"{profit}{fee}{net_first}{breakeven}"
                 f"{format_time_until(row['short_next_funding_time']):>10}"
                 f"{format_time_until(row['long_next_funding_time']):>10}  "
                 f"{identity_marker(row['identity_verified']):<3}"

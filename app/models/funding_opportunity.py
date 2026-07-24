@@ -31,6 +31,19 @@ class FundingOpportunity:
     # funding_spread <= 0 (не должно происходить — уже отфильтровано выше).
     breakeven_periods: float = None
 
+    # Те же fee_percent/funding_spread в USDT при позиции POSITION_SIZE_USDT.
+    # profit_per_period_usdt — повторяется каждый период (пока funding
+    # rate не меняется); fee_usdt — платится один раз при входе.
+    profit_per_period_usdt: float = 0.0
+    fee_usdt: float = 0.0
+
+    # funding_spread - fee_percent (%) / profit_per_period_usdt - fee_usdt ($):
+    # чистый результат, если продержать позицию всего один период. Может быть
+    # отрицательным (комиссия больше, чем спред за один период) — тогда
+    # breakeven_periods > 1 и нужно держать дольше, чтобы выйти в плюс.
+    net_first_period_percent: float = 0.0
+    net_first_period_usdt: float = 0.0
+
     # Время следующего начисления на каждой стороне, unix ms (расписания
     # начисления у разных бирж могут не совпадать)
     short_next_funding_time: int = None

@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS funding_history (
     funding_spread REAL,
     fee_percent REAL,
     breakeven_periods REAL,
+    profit_per_period_usdt REAL,
+    fee_usdt REAL,
+    net_first_period_percent REAL,
+    net_first_period_usdt REAL,
     identity_verified INTEGER
 );
 
@@ -109,6 +113,10 @@ class HistoryStore:
         self._add_column_if_missing(conn, "funding_history", "long_next_funding_time", "INTEGER")
         self._add_column_if_missing(conn, "funding_history", "fee_percent", "REAL")
         self._add_column_if_missing(conn, "funding_history", "breakeven_periods", "REAL")
+        self._add_column_if_missing(conn, "funding_history", "profit_per_period_usdt", "REAL")
+        self._add_column_if_missing(conn, "funding_history", "fee_usdt", "REAL")
+        self._add_column_if_missing(conn, "funding_history", "net_first_period_percent", "REAL")
+        self._add_column_if_missing(conn, "funding_history", "net_first_period_usdt", "REAL")
 
     @staticmethod
     def _add_column_if_missing(conn, table, column, column_type):
@@ -160,7 +168,10 @@ class HistoryStore:
                 run_at, o.coin,
                 o.short_exchange, o.short_funding_rate, o.short_volume, o.short_next_funding_time,
                 o.long_exchange, o.long_funding_rate, o.long_volume, o.long_next_funding_time,
-                o.funding_spread, o.fee_percent, o.breakeven_periods, _bool_to_int(o.identity_verified),
+                o.funding_spread, o.fee_percent, o.breakeven_periods,
+                o.profit_per_period_usdt, o.fee_usdt,
+                o.net_first_period_percent, o.net_first_period_usdt,
+                _bool_to_int(o.identity_verified),
             )
             for o in opportunities
         ]
@@ -172,8 +183,10 @@ class HistoryStore:
                     run_at, coin,
                     short_exchange, short_funding_rate, short_volume, short_next_funding_time,
                     long_exchange, long_funding_rate, long_volume, long_next_funding_time,
-                    funding_spread, fee_percent, breakeven_periods, identity_verified
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    funding_spread, fee_percent, breakeven_periods,
+                    profit_per_period_usdt, fee_usdt,
+                    net_first_period_percent, net_first_period_usdt, identity_verified
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 rows,
             )

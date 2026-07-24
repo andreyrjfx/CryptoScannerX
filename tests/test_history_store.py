@@ -66,7 +66,11 @@ def test_save_and_read_arbitrage_opportunity():
 
 def test_save_and_read_funding_opportunity():
     store = make_store()
-    fopp = make_funding_opportunity(identity_verified=False, fee_percent=0.105, breakeven_periods=1.5)
+    fopp = make_funding_opportunity(
+        identity_verified=False, fee_percent=0.105, breakeven_periods=1.5,
+        profit_per_period_usdt=0.7, fee_usdt=1.05,
+        net_first_period_percent=-0.035, net_first_period_usdt=-0.35,
+    )
 
     store.save_funding([fopp])
     rows = store.recent_funding()
@@ -79,6 +83,10 @@ def test_save_and_read_funding_opportunity():
     assert abs(row["funding_spread"] - 0.07) < 1e-9
     assert abs(row["fee_percent"] - 0.105) < 1e-9
     assert abs(row["breakeven_periods"] - 1.5) < 1e-9
+    assert abs(row["profit_per_period_usdt"] - 0.7) < 1e-9
+    assert abs(row["fee_usdt"] - 1.05) < 1e-9
+    assert abs(row["net_first_period_percent"] - (-0.035)) < 1e-9
+    assert abs(row["net_first_period_usdt"] - (-0.35)) < 1e-9
     assert row["identity_verified"] is False
 
 
@@ -216,6 +224,8 @@ def test_migrates_old_database_missing_funding_time_columns():
     fopp = make_funding_opportunity(
         short_next_funding_time=1700000000000, long_next_funding_time=1700003600000,
         fee_percent=0.105, breakeven_periods=1.5,
+        profit_per_period_usdt=0.7, fee_usdt=1.05,
+        net_first_period_percent=-0.035, net_first_period_usdt=-0.35,
     )
     store.save_funding([fopp])
 
@@ -225,4 +235,7 @@ def test_migrates_old_database_missing_funding_time_columns():
     assert rows[0]["long_next_funding_time"] == 1700003600000
     assert abs(rows[0]["fee_percent"] - 0.105) < 1e-9
     assert abs(rows[0]["breakeven_periods"] - 1.5) < 1e-9
-    assert rows[0]["long_next_funding_time"] == 1700003600000
+    assert abs(rows[0]["profit_per_period_usdt"] - 0.7) < 1e-9
+    assert abs(rows[0]["fee_usdt"] - 1.05) < 1e-9
+    assert abs(rows[0]["net_first_period_percent"] - (-0.035)) < 1e-9
+    assert abs(rows[0]["net_first_period_usdt"] - (-0.35)) < 1e-9

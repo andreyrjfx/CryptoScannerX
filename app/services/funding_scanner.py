@@ -1,6 +1,9 @@
 from itertools import combinations
 
-from app.config import MIN_VOLUME_USDT, MIN_FUNDING_SPREAD
+from app.config import (
+    MIN_VOLUME_USDT, MIN_FUNDING_SPREAD, POSITION_SIZE_USDT,
+    REQUIRE_MATCHING_FUNDING_TIME, FUNDING_TIME_TOLERANCE_MS,
+)
 from app.models.funding_opportunity import FundingOpportunity
 from app.calculators.fee_calculator import FeeCalculator
 
@@ -11,6 +14,12 @@ class FundingScanner:
     funding rate + лонг того же коина на бирже с более низким (или
     отрицательным) funding rate. Цена при этом не имеет значения —
     позиция рыночно-нейтральна, прибыль — разница funding-выплат.
+
+    По умолчанию (REQUIRE_MATCHING_FUNDING_TIME=True) показываются только
+    пары, где следующая выплата на обеих биржах происходит в одно и то же
+    время (с запасом FUNDING_TIME_TOLERANCE_MS) — иначе часть времени
+    экспозиция была бы только по одной ноге, и funding_spread не отражает
+    честный за-период результат.
     """
 
     def __init__(self, tickers, min_spread=MIN_FUNDING_SPREAD):
@@ -45,6 +54,9 @@ class FundingScanner:
         if short_side.exchange == long_side.exchange:
             return
 
+        if REQUIRE_MATCHING_FUNDING_TIME and not self._funding_times_match(short_side, long_side):
+            return
+
         spread = short_side.funding_rate - long_side.funding_rate
 
         if spread < self.min_spread:
@@ -58,6 +70,9 @@ class FundingScanner:
         )
         breakeven_periods = fee_percent / spread if spread > 0 else None
 
+        profit_per_period_usdt = POSITION_SIZE_USDT * spread / 100
+        fee_usdt = POSITION_SIZE_USDT * fee_percent / 100
+
         opportunities.append(FundingOpportunity(
             coin=short_side.coin,
             short_exchange=short_side.exchange,
@@ -69,6 +84,19 @@ class FundingScanner:
             funding_spread=spread,
             fee_percent=fee_percent,
             breakeven_periods=breakeven_periods,
+            profit_per_period_usdt=profit_per_period_usdt,
+            fee_usdt=fee_usdt,
+            net_first_period_percent=spread - fee_percent,
+            net_first_period_usdt=profit_per_period_usdt - fee_usdt,
             short_next_funding_time=short_side.next_funding_time,
             long_next_funding_time=long_side.next_funding_time,
         ))
+
+    @staticmethod
+    def _funding_times_match(short_side, long_side):
+        if short_side.next_funding_time is None or long_side.next_funding_time is None:
+            # Не знаем расписание одной из сторон — не можем подтвердить
+            # совпадение, поэтому безопаснее исключить, а не гадать.
+            return False
+
+        return abs(short_side.next_funding_time - long_side.next_funding_time) <= FUNDING_TIME_TOLERANCE_MS
